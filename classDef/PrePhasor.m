@@ -1,5 +1,7 @@
 classdef PrePhasor < handle
-% Naming conventions
+% This toolbox is designed to prepare the BCDI data for phase-retrieval reconstruction
+    
+    % Naming conventions
 
 % % Methods
 % Method names should be all lower case
