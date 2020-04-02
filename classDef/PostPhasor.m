@@ -822,9 +822,9 @@ classdef PostPhasor < handle
             if ~exist('volume','var')
                 volume = 'all';
             end
-            
+            figure_position = [100 100 2000 500];
             if ismember(volume,['amplitude', 'all'])
-                figure('Position',[100 100 2000 500]);
+                figure('Position',figure_position);
                 subplot(1,3,1);
                 val = squeeze(abs(postPhasor.object(:,round(end/2),round(end/2))));
                 val_contour = squeeze((postPhasor.mask(:,round(end/2),round(end/2)))).*max(val(:));
@@ -857,7 +857,7 @@ classdef PostPhasor < handle
                 grid on;xlabel('Position [nm]');set(gca,'FontSize',20);
             end
             if ismember(volume,['phase', 'all'])       
-                figure;
+                figure('Position',figure_position);
                 subplot(1,3,1);
                 val = squeeze(angle(postPhasor.object(:,round(end/2),round(end/2))));
                 plot(postPhasor.plotting.object.vector1,val,'.-');hold on
@@ -877,7 +877,7 @@ classdef PostPhasor < handle
                 title('Phase profile');grid on;xlabel('Position [nm]');
             end
             if ismember(volume,['displacement', 'all'])            
-                figure;
+                figure('Position',figure_position);
                 subplot(1,3,1);
                 val = squeeze(postPhasor.displacement(:,round(end/2),round(end/2)));
                 plot(postPhasor.plotting.object.vector1,val,'.-');hold on
@@ -897,7 +897,7 @@ classdef PostPhasor < handle
                 title('Displacement profile');grid on;xlabel('Position [nm]');
             end
             if ismember(volume,['strain', 'all'])      
-                figure;
+                figure('Position',figure_position);
                 subplot(1,3,1);
                 val = squeeze(postPhasor.strain(:,round(end/2),round(end/2)));
                 plot(postPhasor.plotting.strain.vector1,val,'.-');hold on
