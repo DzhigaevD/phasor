@@ -265,7 +265,7 @@ classdef PostPhasor < handle
         function calculate_strain_unwrap(postPhasor, strain_axis)
             %jclark
             %unwrap based on diff and cumsum
-            %drc is direction
+            %strain_axis is direction
 
             if exist('strain_axis') ~= 1
                 strain_axis = 1;
@@ -313,7 +313,7 @@ classdef PostPhasor < handle
             if strain_axis < 0
                 postPhasor.strain = flip(diff(flip(postPhasor.displacement,abs(strain_axis)),abs(strain_axis))./postPhasor.object_sampling);
             else
-                postPhasor.strain = flip(diff(postPhasor.displacement,strain_axis)./postPhasor.object_sampling);
+                postPhasor.strain = (diff(postPhasor.displacement,strain_axis)./postPhasor.object_sampling);
             end
             
             mask_shift = [0,0,0];
@@ -917,8 +917,17 @@ classdef PostPhasor < handle
                 title('Strain profile');grid on;xlabel('Position [nm]');    
             end            
         end
-        % Save functions %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Save functions %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
         % save the current instance of the object
+        function save_postPhasor(postPhasor)
+            postPhasor.dataTime = getTimeStamp;                        
+            save_path = fullfile(postPhasor.path, 'post_processing');
+            mkdir(save_path);
+            
+            % Save the whole instance
+            save(fullfile(save_path, sprintf('postPhasor_%s.mat',postPhasor.dataTime)),'postPhasor');
+        end
+        
         function save_all(postPhasor)      
             postPhasor.dataTime = getTimeStamp;                        
             save_path = fullfile(postPhasor.path, 'post_processing');
