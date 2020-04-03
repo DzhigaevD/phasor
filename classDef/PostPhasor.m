@@ -458,7 +458,11 @@ classdef PostPhasor < handle
                     error('Can not load the data!')
                 end
             end                           
-
+            
+            if size(postPhasor.object)~=size(postPhasor.data)
+                error('Dimensions of the object and data do not match.\n Calculate PRTF before cropping!');
+            end
+            
             %get pixel sizes direction
             angxy=(postPhasor.experiment.sample_detector_d.*postPhasor.experiment.wavelength)./[size(postPhasor.data,1),size(postPhasor.data,2)]./postPhasor.experiment.detector_pitch;
 
@@ -492,7 +496,7 @@ classdef PostPhasor < handle
             %Ipnmn=abs(fftshift(fftn(fftshift(zero_pad_ver3(fftshift(ifftn(fftshift(Ipnm))),size(Ipnm,2),size(Ipnm,1),62)))));
             %datan=abs(fftshift(fftn(fftshift(zero_pad_ver3(fftshift(ifftn(fftshift(data))),size(Ipnm,2),size(Ipnm,1),62)))));
 
-            xyz=center_of_mass(postPhasor.data);
+            xyz=center_of_mass(postPhasor.data,0);
             postPhasor.data=circshift(postPhasor.data,-round([xyz(2),xyz(1),xyz(3)]));
             Ipnm=circshift(Ipnm,-round([xyz(2),xyz(1),xyz(3)]));
 
@@ -785,7 +789,7 @@ classdef PostPhasor < handle
             colormap jet
             set(gca,'FontSize',20);
         end
-        
+         
         function plot_strain_slice(postPhasor)
             try
                 figure('Position',[100 100 2000 500]);
