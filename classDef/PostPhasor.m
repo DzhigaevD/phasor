@@ -252,8 +252,12 @@ classdef PostPhasor < handle
             mask_shift = [0,0,0];
             mask_shift(abs(strain_axis)) = 1;
 
-            if abs(strain_axis) == 1
+            if     abs(strain_axis) == 1
                 postPhasor.strain_mask = postPhasor.mask(1:end-1,:,:);
+            elseif abs(strain_axis) == 2
+                postPhasor.strain_mask = postPhasor.mask(:,1:end-1,:);
+            elseif abs(strain_axis) == 3
+                postPhasor.strain_mask = postPhasor.mask(:,:,1:end-1);
             end
 
             postPhasor.strain_mask = postPhasor.strain_mask+circshift(postPhasor.strain_mask,mask_shift);
@@ -321,6 +325,10 @@ classdef PostPhasor < handle
 
             if abs(strain_axis) == 1
                 postPhasor.strain_mask = postPhasor.mask(1:end-1,:,:);
+            elseif abs(strain_axis) == 2
+                postPhasor.strain_mask = postPhasor.mask(:,1:end-1,:);                
+            elseif abs(strain_axis) == 3
+                postPhasor.strain_mask = postPhasor.mask(:,:,1:end-1);            
             end
 
             postPhasor.strain_mask = postPhasor.strain_mask+circshift(postPhasor.strain_mask,mask_shift);
@@ -555,10 +563,13 @@ classdef PostPhasor < handle
             % [IN DEVELOPMENT]
         end
         
-        function calculate_optical_path(postPhasor)
+        function calculate_optical_path(postPhasor,direction)
             % adopted from Jerome Carnis
-%             def get_opticalpath(support, direction, k, width_z=None, width_y=None, width_x=None, debugging=False):
-%             k_i = [sind*(postPhasor.experiment.k_i)]
+            
+            switch postPhasor.experiment.rocking_motor
+                case 'dtheta'
+                    k_i = sind(postPhasor.experiment.);
+            end
 % %             Calculate the optical path for refraction/absorption corrections in the crystal. 'k' should be in the same basis
 % %             (crystal or laboratory frame) as the data. For xrayutilities, the data is orthogonalized in crystal frame.
 % % 
@@ -571,25 +582,25 @@ classdef PostPhasor < handle
 % %             :param debugging: set to True to see plots
 % %             :type debugging: bool
 % %             :return: the optical path, of the same shape as mysupport
-%             
-%             if postPhasor.mask ~= 3:
-%                 error('ValueError support should be a 3D array')
-%             end
+            
+            if postPhasor.mask ~= 3
+                error('ValueError support should be a 3D array')
+            end
+
+            nbz, nby, nbx = [size(postPhasor.mask,3),size(postPhasor.mask,1),size(postPhasor.mask,2)];
+            
+            path = zeros(nby, nbx, nbz);
+
+            indices_support = postPhasor.mask~=0
+            min_z = min(indices_support(3));
+            max_z = max(indices_support(3)) + 1;  % last point not included in range()
+            min_y = min(indices_support(1));
+            max_y = max(indices_support(1)) + 1  % last point not included in range()
+            min_x = min(indices_support(2));
+            max_x = max(indices_support(2)) + 1  % last point not included in range()
+            fprintf('Support limits (start_z, stop_z, start_y, stop_y, start_x, stop_x):(%d , %d, %d, %d, %d, %d',min_z,max_z,min_y,max_y,min_x,max_x);
 % 
-%             [nbz, nby, nbx] = [size(postPhasor.mask,3),size(postPhasor.mask,1),size(postPhasor.mask,2)];
-%             
-%             path = zeros(nby, nbx, nbz);
-% 
-%             indices_support = postPhasor.mask~=0
-%             min_z = min(indices_support(3));
-%             max_z = max(indices_support(3)) + 1;  % last point not included in range()
-%             min_y = min(indices_support(1));
-%             max_y = max(indices_support(1)) + 1  % last point not included in range()
-%             min_x = min(indices_support(2));
-%             max_x = max(indices_support(2)) + 1  % last point not included in range()
-%             fprintf('Support limits (start_z, stop_z, start_y, stop_y, start_x, stop_x):(%d , %d, %d, %d, %d, %d',min_z,max_z,min_y,max_y,min_x,max_x);
-% 
-%             if direction == "in":
+            if direction == "in":
 %                 k_norm = -1 * k / np.linalg.norm(k)  % we will work with -k_in
 %                 if (k_norm == np.array([-1, 0, 0])).all():  # data orthogonalized in laboratory frame, k_in along axis 0
 %                     for idz in range(min_z, max_z, 1):
