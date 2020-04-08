@@ -21,6 +21,7 @@ classdef PostPhasor < handle
         strain_mask;
         strain_mask_bulk;
         strain_mask_shell;
+        optical_path;
         plotting;
         mask;           
         prtf;
@@ -564,11 +565,11 @@ classdef PostPhasor < handle
         end
         
         function calculate_optical_path(postPhasor,direction)
-            % adopted from Jerome Carnis
+            % adapted from Jerome Carnis post-processing BCDI
             
             switch postPhasor.experiment.rocking_motor
                 case 'dtheta'
-                    k_i = sind(postPhasor.experiment.);
+%                     k_i = sind(postPhasor.experiment.);
             end
 % %             Calculate the optical path for refraction/absorption corrections in the crystal. 'k' should be in the same basis
 % %             (crystal or laboratory frame) as the data. For xrayutilities, the data is orthogonalized in crystal frame.
@@ -589,64 +590,79 @@ classdef PostPhasor < handle
 
             nbz, nby, nbx = [size(postPhasor.mask,3),size(postPhasor.mask,1),size(postPhasor.mask,2)];
             
-            path = zeros(nby, nbx, nbz);
+            opt_path = zeros(nby, nbx, nbz);
 
-            indices_support = postPhasor.mask~=0
+            indices_support = ind2sub(size(postPhasor.mask),find(postPhasor.mask~=0));
+            
             min_z = min(indices_support(3));
             max_z = max(indices_support(3)) + 1;  % last point not included in range()
             min_y = min(indices_support(1));
-            max_y = max(indices_support(1)) + 1  % last point not included in range()
+            max_y = max(indices_support(1)) + 1;  % last point not included in range()
             min_x = min(indices_support(2));
-            max_x = max(indices_support(2)) + 1  % last point not included in range()
+            max_x = max(indices_support(2)) + 1;  % last point not included in range()
             fprintf('Support limits (start_z, stop_z, start_y, stop_y, start_x, stop_x):(%d , %d, %d, %d, %d, %d',min_z,max_z,min_y,max_y,min_x,max_x);
 % 
-            if direction == "in":
-%                 k_norm = -1 * k / np.linalg.norm(k)  % we will work with -k_in
-%                 if (k_norm == np.array([-1, 0, 0])).all():  # data orthogonalized in laboratory frame, k_in along axis 0
+%             if strcmp(direction,"in")
+                k_norm = -1 * k / abs(k);  % we will work with -k_in
+%                 if (k_norm == np.array([-1, 0, 0])).all():  % data orthogonalized in laboratory frame, k_in along axis 0
 %                     for idz in range(min_z, max_z, 1):
 %                         path[idz, :, :] = support[0:idz+1, :, :].sum(axis=0)  # include also the pixel
 %                     path = np.multiply(path, support)
 % 
-%                 else:  # data orthogonalized in crystal frame (xrayutilities), k_in is not along any array axis
-%                     for idz in range(min_z, max_z, 1):
-%                         for idy in range(min_y, max_y, 1):
-%                             for idx in range(min_x, max_x, 1):
-%                                 if support[idz, idy, idx] == 1:
-%                                     stop_flag = False
-%                                     counter = 1
-%                                     pixel = np.array([idz, idy, idx])  # pixel for which the optical path is calculated
-%                                     while not stop_flag:
-%                                         pixel = pixel + k_norm  # add unitary translation in -k_in direction
-%                                         coords = round(pixel) % rounding to the nearest integer
-%                                         stop_flag = True
-%                                         if (min_z <= coords[0] <= max_z) and (min_y <= coords[1] <= max_y) and\
-%                                                 (min_x <= coords[2] <= max_x):
-%                                             counter = counter + support[int(coords[0]), int(coords[1]), int(coords[2])]
-%                                             stop_flag = False
-%                                     path[idz, idy, idx] = counter
-%                                 else:  # point outside of the support, optical path = 0
-%                                     path[idz, idy, idx] = 0
-% 
-%             if direction == "out":
-%                 k_norm = k / np.linalg.norm(k)
-%                 for idz in range(min_z, max_z, 1):
-%                     for idy in range(min_y, max_y, 1):
-%                         for idx in range(min_x, max_x, 1):
-%                             if support[idz, idy, idx] == 1:
-%                                 stop_flag = False
-%                                 counter = 1
-%                                 pixel = np.array([idz, idy, idx])  # pixel for which the optical path is calculated
-%                                 while not stop_flag:
-%                                     pixel = pixel + k_norm  # add unitary translation in k_out direction
-%                                     coords = np.rint(pixel)
-%                                     stop_flag = True
-%                                     if (min_z <= coords[0] <= max_z) and (min_y <= coords[1] <= max_y) and \
-%                                             (min_x <= coords[2] <= max_x):
-%                                         counter = counter + support[int(coords[0]), int(coords[1]), int(coords[2])]
-%                                         stop_flag = False
-%                                 path[idz, idy, idx] = counter
-%                             else:  # point outside of the support, optical path = 0
-%                                 path[idz, idy, idx] = 0             
+%                 else:  
+                % data orthogonalized in crystal frame (xrayutilities), k_in is not along any array axis
+                for idz = min_z:max_z
+                    for idy = min_y:max_y
+                        for idx = min_x:max_x
+                            if postPhasor.mask(idz, idy, idx) == 1
+                                stop_flag = 0;
+                                counter = 1;
+                                pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
+                                while ~stop_flag
+                                    pixel = pixel + k_norm;  % add unitary translation in -k_in direction
+                                    coords = round(pixel); % rounding to the nearest integer
+                                    stop_flag = 1;
+                                    if (min_z <= coords(3) <= max_z) && (min_y <= coords(1) <= max_y) && (min_x <= coords(2) <= max_x)
+                                        counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
+                                        stop_flag = 0;
+                                    end
+                                end
+                                opt_path_in(idy, idx, idz) = counter;
+                            else  % point outside of the support, optical path = 0
+                                opt_path_in(idy, idx, idz) = 0;
+                            end
+                        end
+                    end
+                end
+%             end
+            
+%             if strcmp(direction,"out")
+                k_norm = k / abs(k);
+                for idz = min_z:max_z
+                    for idy = min_y:max_y
+                        for idx = min_x:max_x
+                            if support(idy, idx, idz) == 1
+                                stop_flag = 0;
+                                counter = 1;
+                                pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
+                                while ~stop_flag
+                                    pixel = pixel + k_norm;  % add unitary translation in k_out direction
+                                    coords = round(pixel);
+                                    stop_flag = 1;
+                                    if (min_z <= coords(3) <= max_z) && (min_y <= coords(1) <= max_y) && (min_x <= coords(2) <= max_x)
+                                        counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
+                                        stop_flag = 0;
+                                    end
+                                end
+                                opt_path_out(idy, idx, idz) = counter;
+                            else  % point outside of the support, optical path = 0
+                                opt_path_out(idy, idx, idz) = 0;
+                            end
+                        end
+                    end
+                end
+%             end  
+            postPhasor.optical_path = opt_path_in+opt_path_out;
         end
         % Visualization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot_prtf(postPhasor)
@@ -749,7 +765,7 @@ classdef PostPhasor < handle
             if nargin == 1
                 cmap = 'jet';
                 input = postPhasor.object./max(max(max(abs(postPhasor.object))));       
-                input = input.*postPhasor.support;
+                input = input.*postPhasor.mask;
             elseif nargin == 2
                 cmap = 'jet';                
             end            
