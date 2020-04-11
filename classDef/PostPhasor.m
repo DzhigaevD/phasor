@@ -16,6 +16,7 @@ classdef PostPhasor < handle
         object;
         object_dispersion;
         object_absorption;
+        log; % property where flags are rising, when a certain correction was done to the object
         displacement;
         strain;
         strain_histogram;
@@ -731,7 +732,11 @@ classdef PostPhasor < handle
         end
         
         function correct_refraction(postPhasor)
-            
+            if size(postPhasor.object) == size(postPhasor.optical_path)
+                
+            else
+                error('Sizes of object and the optical path do not match!')
+            end
         end
         % Visualization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot_prtf(postPhasor)
