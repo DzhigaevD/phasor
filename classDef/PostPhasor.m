@@ -14,8 +14,8 @@ classdef PostPhasor < handle
         object_fft_mod;    
         object_sampling;        
         object;
-        object_dispersion;
-        object_absorption;
+        material;        
+        object_refraction;
         log; % property where flags are rising, when a certain correction was done to the object
         displacement;
         strain;
@@ -61,6 +61,16 @@ classdef PostPhasor < handle
                 error('No real-space sampling defined!');
             end
             
+            try
+                postPhasor.material.absorption = input_param.absorption;
+                postPhasor.material.dispersion = input_param.dispersion;
+                postPhasor.material.d_spacing  = input_param.d_spacing;
+            catch
+                warning('No absorption/dispersion values defined!');
+            end
+            
+            % Initialize log fields
+            postPhasor.log.correct_refraction = 0;
                         
             disp('PostPhasor instance created succesfully');
         end
@@ -274,7 +284,7 @@ classdef PostPhasor < handle
         end
         
         function calculate_strain(postPhasor, strain_axis)
-            H = 2*pi/postPhasor.experiment.d_spacing;
+            H = 2*pi/postPhasor.material.d_spacing;
 
             postPhasor.displacement = -angle(postPhasor.object)./H;
             
@@ -346,7 +356,7 @@ classdef PostPhasor < handle
             %now get original size
             phase = crop_by_one(temp,strain_axis_unwrap);
             
-            H = 2*pi/postPhasor.experiment.d_spacing;
+            H = 2*pi/postPhasor.material.d_spacing;
             postPhasor.displacement = -phase./H;
             
             if strain_axis < 0
@@ -599,8 +609,7 @@ classdef PostPhasor < handle
         end
         
         function calculate_optical_path(postPhasor)
-            % adapted from Jerome Carnis post-processing BCDI
-            % [in development]                    
+            % adapted from Jerome Carnis post-processing BCDI                         
 % %             Calculate the optical path for refraction/absorption corrections in the crystal. 'k' should be in the same basis
 % %             (crystal or laboratory frame) as the data. For xrayutilities, the data is orthogonalized in crystal frame.
 % % 
@@ -655,9 +664,9 @@ classdef PostPhasor < handle
             nbz = size(postPhasor.mask,3);
             nby = size(postPhasor.mask,1);
             nbx = size(postPhasor.mask,2);
-            
-            opt_path = zeros(nby, nbx, nbz);
-            
+                        
+            opt_path_in  = zeros(nby, nbx, nbz);
+            opt_path_out = zeros(nby, nbx, nbz);
             % [FIND iNDICIES of convex object support]
             ind = find(postPhasor.mask);
             
@@ -724,7 +733,7 @@ classdef PostPhasor < handle
             end
             
             try
-                postPhasor.optical_path = (opt_path_in+opt_path_out)*postPhasor.object_sampling*1e9; % [nm]
+                postPhasor.optical_path = (opt_path_in+opt_path_out)*postPhasor.object_sampling; % [m]
             catch
                 postPhasor.optical_path = opt_path_in+opt_path_out;
                 warning('No real space pixel size found! Continue with voxels')
@@ -732,12 +741,22 @@ classdef PostPhasor < handle
         end
         
         function correct_refraction(postPhasor)
+            postPhasor.calculate_optical_path;
+            
             if size(postPhasor.object) == size(postPhasor.optical_path)
-                
+                if ~postPhasor.log.correct_refraction
+                    postPhasor.object_refraction = exp(-1j*2*pi*postPhasor.material.dispersion*postPhasor.optical_path/postPhasor.experiment.wavelength);
+                    postPhasor.object = postPhasor.object.*postPhasor.object_refraction;
+                    postPhasor.log.correct_refraction = 1;
+                    disp('Object was corrected for refraction');
+                else
+                    warning('Object was corrected for refraction already. Do nothing.')
+                end
             else
                 error('Sizes of object and the optical path do not match!')
             end
         end
+        
         % Visualization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot_prtf(postPhasor)
             figure;
@@ -923,15 +942,31 @@ classdef PostPhasor < handle
         
         function plot_optical_path_slice(postPhasor)            
             figure('Position',[100 100 2000 500]);
-            subplot(1,3,1);imagesc(postPhasor.plotting.object.vector2,postPhasor.plotting.object.vector1,abs(postPhasor.optical_path(:,:,round(end/2))));
+            subplot(1,3,1);imagesc(postPhasor.plotting.object.vector2,postPhasor.plotting.object.vector1,1e9*postPhasor.optical_path(:,:,round(end/2))); %converted to [nm]
             axis image;title('Optical path, dimensions [1,2]');xlabel('Position [nm]');ylabel('Position [nm]');
             set(gca,'FontSize',20);colorbar();
 
-            subplot(1,3,2);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector1,squeeze(abs(postPhasor.optical_path(:,round(end/2),:))));
+            subplot(1,3,2);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector1,1e9*squeeze(postPhasor.optical_path(:,round(end/2),:))); %converted to [nm]
             axis image;title('Optical path, dimensions [1,3]');xlabel('Position [nm]');ylabel('Position [nm]');
             set(gca,'FontSize',20);colorbar();
 
-            subplot(1,3,3);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector2,squeeze(abs(postPhasor.optical_path(round(end/2),:,:))));
+            subplot(1,3,3);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector2,1e9*squeeze(postPhasor.optical_path(round(end/2),:,:))); %converted to [nm]
+            axis image;title('Optical path, dimensions [2,3]');xlabel('Position [nm]');ylabel('Position [nm]');
+            colormap jet
+            set(gca,'FontSize',20);colorbar();
+        end
+        
+        function plot_refraction_slice(postPhasor)            
+            figure('Position',[100 100 2000 500]);
+            subplot(1,3,1);imagesc(postPhasor.plotting.object.vector2,postPhasor.plotting.object.vector1,angle(postPhasor.object_refraction(:,:,round(end/2)))); %converted to [nm]
+            axis image;title('Optical path, dimensions [1,2]');xlabel('Position [nm]');ylabel('Position [nm]');
+            set(gca,'FontSize',20);colorbar();
+
+            subplot(1,3,2);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector1,angle(squeeze(postPhasor.object_refraction(:,round(end/2),:)))); %converted to [nm]
+            axis image;title('Optical path, dimensions [1,3]');xlabel('Position [nm]');ylabel('Position [nm]');
+            set(gca,'FontSize',20);colorbar();
+
+            subplot(1,3,3);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector2,angle(squeeze(postPhasor.object_refraction(round(end/2),:,:)))); %converted to [nm]
             axis image;title('Optical path, dimensions [2,3]');xlabel('Position [nm]');ylabel('Position [nm]');
             colormap jet
             set(gca,'FontSize',20);colorbar();
