@@ -597,10 +597,49 @@ classdef PostPhasor < handle
         function calculate_optical_path(postPhasor)
             % adapted from Jerome Carnis post-processing BCDI
             % [in development]
-            switch postPhasor.experiment.rocking_motor
-                case 'dtheta'
+%             switch postPhasor.experiment.rocking_motor
+%                 case 'dtheta'
 %                     k_i = sind(postPhasor.experiment.);
+%             end
+            
+            % Incidence beam
+            try
+                fprintf('Incidence beam: [y:%.2e, x:%.2e, z:%.2e]\n',postPhasor.experiment.k_in)
+            catch
+                switch postPhasor.experiment.beamline
+                    case '34idc'
+    %                   gamma is anti-clockwise
+                        outofplane_angle = -postPhasor.experiment.phi;
+                        inplane_angle = -postPhasor.experiment.theta;
+
+                        Rmat = [sind(outofplane_angle),...  % y
+                                sind(inplane_angle) * cosd(outofplane_angle),...  % x
+                                cosd(inplane_angle) * cosd(outofplane_angle)];  % z
+
+                        postPhasor.experiment.k_in = 2*pi/postPhasor.experiment.wavelength * Rmat;
+                end
+                fprintf('Incidence beam: [y:%.2e, x:%.2e, z:%.2e]\n',postPhasor.experiment.k_in)
             end
+            
+            % Exit wavevector
+            try
+                fprintf('Outgoing beam: [y:%.2e, x:%.2e, z:%.2e]\n',postPhasor.experiment.k_out)
+            catch
+                switch postPhasor.experiment.beamline
+                    case '34idc'
+    %                   gamma is anti-clockwise                                         
+                        outofplane_angle = postPhasor.experiment.gamma;
+                        inplane_angle = postPhasor.experiment.delta;
+
+                        Rmat = [sind(outofplane_angle),...  % y
+                                sind(inplane_angle) * cosd(outofplane_angle),...  % x
+                                cosd(inplane_angle) * cosd(outofplane_angle)];  % z
+
+                        postPhasor.experiment.k_out = 2*pi/postPhasor.experiment.wavelength * Rmat;
+                end
+                fprintf('Outgoing beam: [y:%.2e, x:%.2e, z:%.2e]\n',postPhasor.experiment.k_out)
+            end
+            
 % %             Calculate the optical path for refraction/absorption corrections in the crystal. 'k' should be in the same basis
 % %             (crystal or laboratory frame) as the data. For xrayutilities, the data is orthogonalized in crystal frame.
 % % 
@@ -612,11 +651,7 @@ classdef PostPhasor < handle
 % %             :param width_x: size of the area to plot in x (axis 2), centered on the middle of the initial array
 % %             :param debugging: set to True to see plots
 % %             :type debugging: bool
-% %             :return: the optical path, of the same shape as mysupport
-            
-            if ndims(postPhasor.mask) ~= 3
-                error('ValueError support should be a 3D array')
-            end
+% %             :return: the optical path, of the same shape as mysupport            
             
             nbz = size(postPhasor.mask,3);
             nby = size(postPhasor.mask,1);
@@ -639,12 +674,7 @@ classdef PostPhasor < handle
 % 
 %             if strcmp(direction,"in")
             k_norm = -1 * postPhasor.experiment.k_in / norm(postPhasor.experiment.k_in);  % we will work with -k_in
-%                 if (k_norm == np.array([-1, 0, 0])).all():  % data orthogonalized in laboratory frame, k_in along axis 0
-%                     for idz in range(min_z, max_z, 1):
-%                         path[idz, :, :] = support[0:idz+1, :, :].sum(axis=0)  # include also the pixel
-%                     path = np.multiply(path, support)
-% 
-%                 else:  
+
                 % data orthogonalized in crystal frame (xrayutilities), k_in is not along any array axis
                 for idz = min_z:max_z
                     for idy = min_y:max_y
@@ -699,76 +729,7 @@ classdef PostPhasor < handle
 %             end  
             postPhasor.optical_path = opt_path_in+opt_path_out;
         end
-        
-        function in_wavevector(postPhasor)
-            % [CURRENT STATE] beam direction is defined in crystal geometry            
-            % rotation of incidence beam
-            switch postPhasor.experiment.beamline
-                case '34idc'
-%                   gamma is anti-clockwise
-                     
-                    outofplane_angle = -postPhasor.experiment.phi;
-                    inplane_angle = -postPhasor.experiment.theta;
-                    
-                    Rmat = [sind(outofplane_angle),...  % y
-                            sind(inplane_angle) * cosd(outofplane_angle),...  % x
-                            cosd(inplane_angle) * cosd(outofplane_angle)];  % z
-                 
-                    postPhasor.experiment.k_in = 2*pi/postPhasor.experiment.wavelength * Rmat;
-            end
-        end
-        
-        function out_wavevector(postPhasor)                        
-%             Calculate the exit wavevector kout depending on the setup parameters, in laboratory frame (z downstream,
-%              y vertical, x outboard).
-%             beamlines available: "34idc"
-%             return: kout vector
-            switch postPhasor.experiment.beamline
-                case '34idc'
-%                   gamma is anti-clockwise                     
-                    
-                    outofplane_angle = postPhasor.experiment.gamma;
-                    inplane_angle = postPhasor.experiment.delta;
-                    
-                    Rmat = [sind(outofplane_angle),...  % y
-                            sind(inplane_angle) * cosd(outofplane_angle),...  % x
-                            cosd(inplane_angle) * cosd(outofplane_angle)];  % z
-                 
-                    postPhasor.experiment.k_out = 2*pi/postPhasor.experiment.wavelength * Rmat;
-            end
-%             if self.beamline == 'SIXS_2018' or self.beamline == 'SIXS_2019':
-%                 # gamma is anti-clockwise
-%                 kout = 2 * np.pi / self.wavelength * np.array(
-%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
-%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
-%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
-%             elif self.beamline == 'ID01':
-%                 # nu is clockwise
-%                 kout = 2 * np.pi / self.wavelength * np.array(
-%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
-%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
-%                      -np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
-%             elif self.beamline == '34ID':
-%                 # gamma is anti-clockwise
-%                 kout = 2 * np.pi / self.wavelength * np.array(
-%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
-%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
-%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
-%             elif self.beamline == 'P10':
-%                 # gamma is anti-clockwise
-%                 kout = 2 * np.pi / self.wavelength * np.array(
-%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
-%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
-%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
-%             elif self.beamline == 'CRISTAL':
-%                 # gamma is anti-clockwise
-%                 kout = 2 * np.pi / self.wavelength * np.array(
-%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
-%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
-%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
-%             else:
-%                 raise ValueError('setup parameter: ', self.beamline, 'not defined')
-        end
+                                                   
         % Visualization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot_prtf(postPhasor)
             figure;
