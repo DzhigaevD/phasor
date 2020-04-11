@@ -14,6 +14,8 @@ classdef PostPhasor < handle
         object_fft_mod;    
         object_sampling;        
         object;
+        object_dispersion;
+        object_absorption;
         displacement;
         strain;
         strain_histogram;
@@ -31,7 +33,7 @@ classdef PostPhasor < handle
         c                       = 2.99792458e8;                                % Speed of light in vacuum
     end
         
-    % - Constructor of the object -    
+    % - Constructor of the object - %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
     methods
         function postPhasor = PostPhasor(input_param)
             
@@ -62,6 +64,7 @@ classdef PostPhasor < handle
             disp('PostPhasor instance created succesfully');
         end
     end  
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     methods
         % Load methods %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -596,12 +599,20 @@ classdef PostPhasor < handle
         
         function calculate_optical_path(postPhasor)
             % adapted from Jerome Carnis post-processing BCDI
-            % [in development]
-%             switch postPhasor.experiment.rocking_motor
-%                 case 'dtheta'
-%                     k_i = sind(postPhasor.experiment.);
-%             end
-            
+            % [in development]                    
+% %             Calculate the optical path for refraction/absorption corrections in the crystal. 'k' should be in the same basis
+% %             (crystal or laboratory frame) as the data. For xrayutilities, the data is orthogonalized in crystal frame.
+% % 
+% %             :param support: 3D array, support used for defining the object
+% %             :param direction: "in" or "out" , incident or diffracted wave
+% %             :param k: vector for the incident or diffracted wave depending on direction (xrayutils_orthogonal=True case)
+% %             :param width_z: size of the area to plot in z (axis 0), centered on the middle of the initial array
+% %             :param width_y: size of the area to plot in y (axis 1), centered on the middle of the initial array
+% %             :param width_x: size of the area to plot in x (axis 2), centered on the middle of the initial array
+% %             :param debugging: set to True to see plots
+% %             :type debugging: bool
+% %             :return: the optical path, of the same shape as mysupport  
+
             % Incidence beam
             try
                 fprintf('Incidence beam: [y:%.2e, x:%.2e, z:%.2e]\n',postPhasor.experiment.k_in)
@@ -638,20 +649,7 @@ classdef PostPhasor < handle
                         postPhasor.experiment.k_out = 2*pi/postPhasor.experiment.wavelength * Rmat;
                 end
                 fprintf('Outgoing beam: [y:%.2e, x:%.2e, z:%.2e]\n',postPhasor.experiment.k_out)
-            end
-            
-% %             Calculate the optical path for refraction/absorption corrections in the crystal. 'k' should be in the same basis
-% %             (crystal or laboratory frame) as the data. For xrayutilities, the data is orthogonalized in crystal frame.
-% % 
-% %             :param support: 3D array, support used for defining the object
-% %             :param direction: "in" or "out" , incident or diffracted wave
-% %             :param k: vector for the incident or diffracted wave depending on direction (xrayutils_orthogonal=True case)
-% %             :param width_z: size of the area to plot in z (axis 0), centered on the middle of the initial array
-% %             :param width_y: size of the area to plot in y (axis 1), centered on the middle of the initial array
-% %             :param width_x: size of the area to plot in x (axis 2), centered on the middle of the initial array
-% %             :param debugging: set to True to see plots
-% %             :type debugging: bool
-% %             :return: the optical path, of the same shape as mysupport            
+            end         
             
             nbz = size(postPhasor.mask,3);
             nby = size(postPhasor.mask,1);
@@ -671,65 +669,70 @@ classdef PostPhasor < handle
             min_x = min(indices_support(:,2));
             max_x = max(indices_support(:,2)) + 1;  % last point not included in range()
             fprintf('Support limits (start_z, stop_z, start_y, stop_y, start_x, stop_x):(%d , %d, %d, %d, %d, %d)\n',min_z,max_z,min_y,max_y,min_x,max_x);
-% 
-%             if strcmp(direction,"in")
+
             k_norm = -1 * postPhasor.experiment.k_in / norm(postPhasor.experiment.k_in);  % we will work with -k_in
 
-                % data orthogonalized in crystal frame (xrayutilities), k_in is not along any array axis
-                for idz = min_z:max_z
-                    for idy = min_y:max_y
-                        for idx = min_x:max_x
-                            if postPhasor.mask(idy, idx, idz) == 1
-                                stop_flag = 0;
-                                counter = 1;
-                                pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
-                                while ~stop_flag
-                                    pixel = pixel + k_norm;  % add unitary translation in -k_in direction
-                                    coords = round(pixel); % rounding to the nearest integer
-                                    stop_flag = 1;
-                                    if ((min_z <= coords(3)) && (coords(3) <= max_z)) && ((min_y <= coords(1)) && (coords(1) <= max_y)) && ((min_x <= coords(2)) && (coords(2) <= max_x))
-                                        counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
-                                        stop_flag = 0;
-                                    end
+            % data orthogonalized in crystal frame (xrayutilities), k_in is not along any array axis
+            for idz = min_z:max_z
+                for idy = min_y:max_y
+                    for idx = min_x:max_x
+                        if postPhasor.mask(idy, idx, idz) == 1
+                            stop_flag = 0;
+                            counter = 1;
+                            pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
+                            while ~stop_flag
+                                pixel = pixel + k_norm;  % add unitary translation in -k_in direction
+                                coords = round(pixel); % rounding to the nearest integer
+                                stop_flag = 1;
+                                if ((min_z <= coords(3)) && (coords(3) <= max_z)) && ((min_y <= coords(1)) && (coords(1) <= max_y)) && ((min_x <= coords(2)) && (coords(2) <= max_x))
+                                    counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
+                                    stop_flag = 0;
                                 end
-                                opt_path_in(idy, idx, idz) = counter;
-                            else  % point outside of the support, optical path = 0
-                                opt_path_in(idy, idx, idz) = 0;
                             end
+                            opt_path_in(idy, idx, idz) = counter;
+                        else  % point outside of the support, optical path = 0
+                            opt_path_in(idy, idx, idz) = 0;
                         end
                     end
                 end
-%             end
+            end
+
+            k_norm = postPhasor.experiment.k_out / norm(postPhasor.experiment.k_out);
+            for idz = min_z:max_z
+                for idy = min_y:max_y
+                    for idx = min_x:max_x
+                        if postPhasor.mask(idy, idx, idz) == 1
+                            stop_flag = 0;
+                            counter = 1;
+                            pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
+                            while ~stop_flag
+                                pixel = pixel + k_norm;  % add unitary translation in k_out direction
+                                coords = round(pixel);
+                                stop_flag = 1;
+                                if ((min_z <= coords(3)) && (coords(3) <= max_z)) && ((min_y <= coords(1)) && (coords(1) <= max_y)) && ((min_x <= coords(2)) && (coords(2) <= max_x))
+                                    counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
+                                    stop_flag = 0;
+                                end
+                            end
+                            opt_path_out(idy, idx, idz) = counter;
+                        else  % point outside of the support, optical path = 0
+                            opt_path_out(idy, idx, idz) = 0;
+                        end
+                    end
+                end
+            end
             
-%             if strcmp(direction,"out")
-                k_norm = postPhasor.experiment.k_out / norm(postPhasor.experiment.k_out);
-                for idz = min_z:max_z
-                    for idy = min_y:max_y
-                        for idx = min_x:max_x
-                            if postPhasor.mask(idy, idx, idz) == 1
-                                stop_flag = 0;
-                                counter = 1;
-                                pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
-                                while ~stop_flag
-                                    pixel = pixel + k_norm;  % add unitary translation in k_out direction
-                                    coords = round(pixel);
-                                    stop_flag = 1;
-                                    if ((min_z <= coords(3)) && (coords(3) <= max_z)) && ((min_y <= coords(1)) && (coords(1) <= max_y)) && ((min_x <= coords(2)) && (coords(2) <= max_x))
-                                        counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
-                                        stop_flag = 0;
-                                    end
-                                end
-                                opt_path_out(idy, idx, idz) = counter;
-                            else  % point outside of the support, optical path = 0
-                                opt_path_out(idy, idx, idz) = 0;
-                            end
-                        end
-                    end
-                end
-%             end  
-            postPhasor.optical_path = opt_path_in+opt_path_out;
+            try
+                postPhasor.optical_path = (opt_path_in+opt_path_out)*postPhasor.object_sampling*1e9; % [nm]
+            catch
+                postPhasor.optical_path = opt_path_in+opt_path_out;
+                warning('No real space pixel size found! Continue with voxels')
+            end
         end
-                                                   
+        
+        function correct_refraction(postPhasor)
+            
+        end
         % Visualization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot_prtf(postPhasor)
             figure;
@@ -917,30 +920,30 @@ classdef PostPhasor < handle
             figure('Position',[100 100 2000 500]);
             subplot(1,3,1);imagesc(postPhasor.plotting.object.vector2,postPhasor.plotting.object.vector1,abs(postPhasor.optical_path(:,:,round(end/2))));
             axis image;title('Optical path, dimensions [1,2]');xlabel('Position [nm]');ylabel('Position [nm]');
-            set(gca,'FontSize',20);
+            set(gca,'FontSize',20);colorbar();
 
             subplot(1,3,2);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector1,squeeze(abs(postPhasor.optical_path(:,round(end/2),:))));
             axis image;title('Optical path, dimensions [1,3]');xlabel('Position [nm]');ylabel('Position [nm]');
-            set(gca,'FontSize',20);
+            set(gca,'FontSize',20);colorbar();
 
             subplot(1,3,3);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector2,squeeze(abs(postPhasor.optical_path(round(end/2),:,:))));
             axis image;title('Optical path, dimensions [2,3]');xlabel('Position [nm]');ylabel('Position [nm]');
             colormap jet
-            set(gca,'FontSize',20);
+            set(gca,'FontSize',20);colorbar();
         end
         
         function plot_amplitude_slice(postPhasor)            
             figure('Position',[100 100 2000 500]);
             subplot(1,3,1);imagesc(postPhasor.plotting.object.vector2,postPhasor.plotting.object.vector1,abs(postPhasor.object(:,:,round(end/2))));
-            axis image;title('Amplitude, dimensions [1,2]');xlabel('Position [nm]');ylabel('Position [nm]');
+            axis image;title('Amplitude, dimensions [1,2]');xlabel('Position [nm]');ylabel('Position [nm]');colorbar();
             set(gca,'FontSize',20);
 
             subplot(1,3,2);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector1,squeeze(abs(postPhasor.object(:,round(end/2),:))));
-            axis image;title('Amplitude, dimensions [1,3]');xlabel('Position [nm]');ylabel('Position [nm]');
+            axis image;title('Amplitude, dimensions [1,3]');xlabel('Position [nm]');ylabel('Position [nm]');colorbar();
             set(gca,'FontSize',20);
 
             subplot(1,3,3);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector2,squeeze(abs(postPhasor.object(round(end/2),:,:))));
-            axis image;title('Amplitude, dimensions [2,3]');xlabel('Position [nm]');ylabel('Position [nm]');
+            axis image;title('Amplitude, dimensions [2,3]');xlabel('Position [nm]');ylabel('Position [nm]');colorbar();
             colormap bone
             set(gca,'FontSize',20);
         end
