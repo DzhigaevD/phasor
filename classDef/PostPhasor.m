@@ -151,28 +151,58 @@ classdef PostPhasor < handle
                 
         end
         
-        function crop_manual(postPhasor)  
-            for jj = 3:-1:2
-                figure; 
-                imagesc(squeeze(sum(abs(postPhasor.object),jj)));
+        function crop_object(postPhasor,option)  
+            % ADD OPTION FOR AUTO CROP
+            if nargin == 1
+                option = 'auto';
+                crop_treshold = 0.02;
+                fprintf('Auto cropping by %.2f of amplitude',crop_treshold);
+            end
+             % [FIND iNDICIES of convex object support]
+            switch option
+                case 'auto'
+                    ind = find(abs(postPhasor.object)>=crop_treshold*max(abs(postPhasor.object(:))));
 
-                hIm = imrect;
+                    [indices_support(:,1), indices_support(:,2), indices_support(:,3)] = ind2sub(size(postPhasor.object), ind);          
 
-                pos = round(getPosition(hIm)); %[xmin ymin width height]                        
+                    min_z = min(indices_support(:,3));
+                    max_z = max(indices_support(:,3));  % last point not included in range()
+                    min_y = min(indices_support(:,1));
+                    max_y = max(indices_support(:,1));  % last point not included in range()
+                    min_x = min(indices_support(:,2));
+                    max_x = max(indices_support(:,2));  % last point not included in range()
 
-                for ii = 1:size(postPhasor.object,jj)      
-                    if jj == 3
-                        temp.object(:,:,ii) = squeeze(postPhasor.object(pos(2):pos(2)+pos(4),pos(1):pos(1)+pos(3),ii));   
-                        temp.mask(:,:,ii) = squeeze(postPhasor.mask(pos(2):pos(2)+pos(4),pos(1):pos(1)+pos(3),ii));   
-                    elseif jj == 2
-                        temp.object(:,ii,:) = squeeze(postPhasor.object(pos(2):pos(2)+pos(4),ii,pos(1):pos(1)+pos(3)));   
-                        temp.mask(:,ii,:) = squeeze(postPhasor.mask(pos(2):pos(2)+pos(4),ii,pos(1):pos(1)+pos(3)));   
-                    end
-                end
-                postPhasor.object = temp.object;
-                postPhasor.mask = temp.mask;
-                clear temp
-                close;
+                    fprintf('Object limits (start_z, stop_z, start_y, stop_y, start_x, stop_x):(%d , %d, %d, %d, %d, %d)\n',min_z,max_z,min_y,max_y,min_x,max_x);
+                    
+                    temp.object = postPhasor.object(min_y:max_y,min_x:max_x,min_z:max_z);
+                    temp.mask   = postPhasor.mask(min_y:max_y,min_x:max_x,min_z:max_z);
+                    
+                    postPhasor.object = temp.object;
+                    postPhasor.mask = temp.mask;
+                case 'manual'
+                    disp('Manual cropping ');
+                    for jj = 3:-1:2
+                        figure; 
+                        imagesc(squeeze(sum(abs(postPhasor.object),jj)));
+
+                        hIm = imrect;
+
+                        pos = round(getPosition(hIm)); %[xmin ymin width height]                        
+
+                        for ii = 1:size(postPhasor.object,jj)      
+                            if jj == 3
+                                temp.object(:,:,ii) = squeeze(postPhasor.object(pos(2):pos(2)+pos(4),pos(1):pos(1)+pos(3),ii));   
+                                temp.mask(:,:,ii) = squeeze(postPhasor.mask(pos(2):pos(2)+pos(4),pos(1):pos(1)+pos(3),ii));   
+                            elseif jj == 2
+                                temp.object(:,ii,:) = squeeze(postPhasor.object(pos(2):pos(2)+pos(4),ii,pos(1):pos(1)+pos(3)));   
+                                temp.mask(:,ii,:) = squeeze(postPhasor.mask(pos(2):pos(2)+pos(4),ii,pos(1):pos(1)+pos(3)));                                    
+                            end
+                        end
+                        postPhasor.object = temp.object;
+                        postPhasor.mask = temp.mask;
+                        clear temp
+                        close;
+                    end                
             end
             
             postPhasor.update_plotting_vectors;
@@ -564,9 +594,9 @@ classdef PostPhasor < handle
             % [IN DEVELOPMENT]
         end
         
-        function calculate_optical_path(postPhasor,direction)
+        function calculate_optical_path(postPhasor)
             % adapted from Jerome Carnis post-processing BCDI
-            
+            % [in development]
             switch postPhasor.experiment.rocking_motor
                 case 'dtheta'
 %                     k_i = sind(postPhasor.experiment.);
@@ -584,26 +614,31 @@ classdef PostPhasor < handle
 % %             :type debugging: bool
 % %             :return: the optical path, of the same shape as mysupport
             
-            if postPhasor.mask ~= 3
+            if ndims(postPhasor.mask) ~= 3
                 error('ValueError support should be a 3D array')
             end
-
-            nbz, nby, nbx = [size(postPhasor.mask,3),size(postPhasor.mask,1),size(postPhasor.mask,2)];
+            
+            nbz = size(postPhasor.mask,3);
+            nby = size(postPhasor.mask,1);
+            nbx = size(postPhasor.mask,2);
             
             opt_path = zeros(nby, nbx, nbz);
-
-            indices_support = ind2sub(size(postPhasor.mask),find(postPhasor.mask~=0));
             
-            min_z = min(indices_support(3));
-            max_z = max(indices_support(3)) + 1;  % last point not included in range()
-            min_y = min(indices_support(1));
-            max_y = max(indices_support(1)) + 1;  % last point not included in range()
-            min_x = min(indices_support(2));
-            max_x = max(indices_support(2)) + 1;  % last point not included in range()
-            fprintf('Support limits (start_z, stop_z, start_y, stop_y, start_x, stop_x):(%d , %d, %d, %d, %d, %d',min_z,max_z,min_y,max_y,min_x,max_x);
+            % [FIND iNDICIES of convex object support]
+            ind = find(postPhasor.mask);
+            
+            [indices_support(:,1), indices_support(:,2), indices_support(:,3)] = ind2sub(size(postPhasor.mask), ind);          
+            
+            min_z = min(indices_support(:,3));
+            max_z = max(indices_support(:,3)) + 1;  % last point not included in range()
+            min_y = min(indices_support(:,1));
+            max_y = max(indices_support(:,1)) + 1;  % last point not included in range()
+            min_x = min(indices_support(:,2));
+            max_x = max(indices_support(:,2)) + 1;  % last point not included in range()
+            fprintf('Support limits (start_z, stop_z, start_y, stop_y, start_x, stop_x):(%d , %d, %d, %d, %d, %d)\n',min_z,max_z,min_y,max_y,min_x,max_x);
 % 
 %             if strcmp(direction,"in")
-                k_norm = -1 * k / abs(k);  % we will work with -k_in
+            k_norm = -1 * postPhasor.experiment.k_in / norm(postPhasor.experiment.k_in);  % we will work with -k_in
 %                 if (k_norm == np.array([-1, 0, 0])).all():  % data orthogonalized in laboratory frame, k_in along axis 0
 %                     for idz in range(min_z, max_z, 1):
 %                         path[idz, :, :] = support[0:idz+1, :, :].sum(axis=0)  # include also the pixel
@@ -614,7 +649,7 @@ classdef PostPhasor < handle
                 for idz = min_z:max_z
                     for idy = min_y:max_y
                         for idx = min_x:max_x
-                            if postPhasor.mask(idz, idy, idx) == 1
+                            if postPhasor.mask(idy, idx, idz) == 1
                                 stop_flag = 0;
                                 counter = 1;
                                 pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
@@ -622,7 +657,7 @@ classdef PostPhasor < handle
                                     pixel = pixel + k_norm;  % add unitary translation in -k_in direction
                                     coords = round(pixel); % rounding to the nearest integer
                                     stop_flag = 1;
-                                    if (min_z <= coords(3) <= max_z) && (min_y <= coords(1) <= max_y) && (min_x <= coords(2) <= max_x)
+                                    if ((min_z <= coords(3)) && (coords(3) <= max_z)) && ((min_y <= coords(1)) && (coords(1) <= max_y)) && ((min_x <= coords(2)) && (coords(2) <= max_x))
                                         counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
                                         stop_flag = 0;
                                     end
@@ -637,11 +672,11 @@ classdef PostPhasor < handle
 %             end
             
 %             if strcmp(direction,"out")
-                k_norm = k / abs(k);
+                k_norm = postPhasor.experiment.k_out / norm(postPhasor.experiment.k_out);
                 for idz = min_z:max_z
                     for idy = min_y:max_y
                         for idx = min_x:max_x
-                            if support(idy, idx, idz) == 1
+                            if postPhasor.mask(idy, idx, idz) == 1
                                 stop_flag = 0;
                                 counter = 1;
                                 pixel = [idy, idx, idz];  % pixel for which the optical path is calculated
@@ -649,7 +684,7 @@ classdef PostPhasor < handle
                                     pixel = pixel + k_norm;  % add unitary translation in k_out direction
                                     coords = round(pixel);
                                     stop_flag = 1;
-                                    if (min_z <= coords(3) <= max_z) && (min_y <= coords(1) <= max_y) && (min_x <= coords(2) <= max_x)
+                                    if ((min_z <= coords(3)) && (coords(3) <= max_z)) && ((min_y <= coords(1)) && (coords(1) <= max_y)) && ((min_x <= coords(2)) && (coords(2) <= max_x))
                                         counter = counter + postPhasor.mask(coords(1), coords(2), coords(3));
                                         stop_flag = 0;
                                     end
@@ -663,6 +698,76 @@ classdef PostPhasor < handle
                 end
 %             end  
             postPhasor.optical_path = opt_path_in+opt_path_out;
+        end
+        
+        function in_wavevector(postPhasor)
+            % [CURRENT STATE] beam direction is defined in crystal geometry            
+            % rotation of incidence beam
+            switch postPhasor.experiment.beamline
+                case '34idc'
+%                   gamma is anti-clockwise
+                     
+                    outofplane_angle = -postPhasor.experiment.phi;
+                    inplane_angle = -postPhasor.experiment.theta;
+                    
+                    Rmat = [sind(outofplane_angle),...  % y
+                            sind(inplane_angle) * cosd(outofplane_angle),...  % x
+                            cosd(inplane_angle) * cosd(outofplane_angle)];  % z
+                 
+                    postPhasor.experiment.k_in = 2*pi/postPhasor.experiment.wavelength * Rmat;
+            end
+        end
+        
+        function out_wavevector(postPhasor)                        
+%             Calculate the exit wavevector kout depending on the setup parameters, in laboratory frame (z downstream,
+%              y vertical, x outboard).
+%             beamlines available: "34idc"
+%             return: kout vector
+            switch postPhasor.experiment.beamline
+                case '34idc'
+%                   gamma is anti-clockwise                     
+                    
+                    outofplane_angle = postPhasor.experiment.gamma;
+                    inplane_angle = postPhasor.experiment.delta;
+                    
+                    Rmat = [sind(outofplane_angle),...  % y
+                            sind(inplane_angle) * cosd(outofplane_angle),...  % x
+                            cosd(inplane_angle) * cosd(outofplane_angle)];  % z
+                 
+                    postPhasor.experiment.k_out = 2*pi/postPhasor.experiment.wavelength * Rmat;
+            end
+%             if self.beamline == 'SIXS_2018' or self.beamline == 'SIXS_2019':
+%                 # gamma is anti-clockwise
+%                 kout = 2 * np.pi / self.wavelength * np.array(
+%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
+%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
+%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
+%             elif self.beamline == 'ID01':
+%                 # nu is clockwise
+%                 kout = 2 * np.pi / self.wavelength * np.array(
+%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
+%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
+%                      -np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
+%             elif self.beamline == '34ID':
+%                 # gamma is anti-clockwise
+%                 kout = 2 * np.pi / self.wavelength * np.array(
+%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
+%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
+%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
+%             elif self.beamline == 'P10':
+%                 # gamma is anti-clockwise
+%                 kout = 2 * np.pi / self.wavelength * np.array(
+%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
+%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
+%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
+%             elif self.beamline == 'CRISTAL':
+%                 # gamma is anti-clockwise
+%                 kout = 2 * np.pi / self.wavelength * np.array(
+%                     [np.cos(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180),  # z
+%                      np.sin(np.pi * self.outofplane_angle / 180),  # y
+%                      np.sin(np.pi * self.inplane_angle / 180) * np.cos(np.pi * self.outofplane_angle / 180)])  # x
+%             else:
+%                 raise ValueError('setup parameter: ', self.beamline, 'not defined')
         end
         % Visualization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot_prtf(postPhasor)
@@ -845,6 +950,22 @@ classdef PostPhasor < handle
                 isoVal = get(hObj,'Value');                 
                 drawIsosurface(input,isoVal);
             end  
+        end
+        
+        function plot_optical_path_slice(postPhasor)            
+            figure('Position',[100 100 2000 500]);
+            subplot(1,3,1);imagesc(postPhasor.plotting.object.vector2,postPhasor.plotting.object.vector1,abs(postPhasor.optical_path(:,:,round(end/2))));
+            axis image;title('Optical path, dimensions [1,2]');xlabel('Position [nm]');ylabel('Position [nm]');
+            set(gca,'FontSize',20);
+
+            subplot(1,3,2);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector1,squeeze(abs(postPhasor.optical_path(:,round(end/2),:))));
+            axis image;title('Optical path, dimensions [1,3]');xlabel('Position [nm]');ylabel('Position [nm]');
+            set(gca,'FontSize',20);
+
+            subplot(1,3,3);imagesc(postPhasor.plotting.object.vector3,postPhasor.plotting.object.vector2,squeeze(abs(postPhasor.optical_path(round(end/2),:,:))));
+            axis image;title('Optical path, dimensions [2,3]');xlabel('Position [nm]');ylabel('Position [nm]');
+            colormap jet
+            set(gca,'FontSize',20);
         end
         
         function plot_amplitude_slice(postPhasor)            
